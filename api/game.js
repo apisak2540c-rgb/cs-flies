@@ -17,7 +17,7 @@ const db = getDatabase(app);
 
 export default async function handler(req, res) {
     // ตั้งค่า CORS เพื่ออนุญาตให้เฉพาะเว็บ github.io ของคุณเรียกใช้งานได้เท่านั้น
-    res.setHeader('Access-Control-Allow-Origin', 'https://apisak2540c-rgb.github.io/cs-flies/');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
