@@ -1,7 +1,6 @@
 import { initializeApp } from "https://gstatic.com";
 import { getDatabase, ref, set, get, update } from "https://gstatic.com";
 
-// ดึงคีย์ลับจากตัวแปรระบบหลังบ้าน (Environment Variables) ของ Vercel
 const firebaseConfig = {
     apiKey: process.env.FIREBASE_API_KEY,
     authDomain: process.env.FIREBASE_AUTH_DOMAIN,
@@ -13,18 +12,19 @@ const firebaseConfig = {
 };
 
 export default async function handler(req, res) {
-    // 🛠️ 1. [การันตี CORS ผ่านแน่]: ส่งค่า Headers ออกไปตั้งแต่บรรทัดแรกสุดของตัวฟังก์ชัน
+    // 🛠️ ปลดล็อกด่านเครือข่าย CORS ส่งเป็นลำดับแรกสุดตามกฎของ Vercel Gateway
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Content-Type, Authorization');
+    res.setHeader('Vary', 'Origin');
 
-    // 🛠️ 2. ดักจับและตอบกลับ Preflight Request (OPTIONS) ทันทีโดยไม่ต้องรัน Logic ด้านล่าง
+    // 🛠️ ตัดการทำงานและส่งสถานะ 200 OK กลับไปทันทีเมื่อเบราว์เซอร์ส่งคำขอแบบ OPTIONS (Preflight) เข้ามาเช็กระบบ
     if (req.method === 'OPTIONS') {
-        return res.status(200).end();
+        res.status(200).end();
+        return;
     }
 
-    // 🛠️ 3. ย้ายการเปิดใช้งานเซิร์ฟเวอร์ Firebase เข้ามาอยู่ในตัวฟังก์ชันเพื่อป้องกันระบบแคชของ Serverless ค้าง
     let app, db;
     try {
         app = initializeApp(firebaseConfig);
@@ -34,7 +34,6 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "เซิร์ฟเวอร์ฐานข้อมูลหลังบ้านทำงานขัดข้อง" });
     }
 
-    // ทำการตรวจสอบและแปลงข้อมูลข้อมูลนำเข้าจากหน้าบ้านป้องกันการส่งข้อมูลหลุดรูปแบบ
     let bodyData = req.body;
     if (typeof bodyData === 'string') {
         try {
@@ -50,13 +49,11 @@ export default async function handler(req, res) {
     const roomRef = ref(db, 'csfiles_rooms/' + roomId);
 
     try {
-        // เงื่อนไขในการสร้างหรือเข้าห้องเกมออนไลน์
         if (action === 'join') {
             const snapshot = await get(roomRef);
             const data = snapshot.val();
 
             if (!data) {
-                // ถ้ายังไม่มีห้อง ให้สร้างห้องใหม่ (คนแรกเป็นโฮสต์/นักพิสูจน์หลักฐาน)
                 const initialRoom = {
                     status: "lobby",
                     forensic: playerName, 
@@ -69,13 +66,11 @@ export default async function handler(req, res) {
                 await set(roomRef, initialRoom);
                 return res.status(200).json({ success: true });
             } else {
-                // ถ้ามีห้องอยู่แล้ว ให้เพิ่มชื่อผู้เล่นใหม่เข้าไปในรายชื่อห้องเดิม
                 await update(ref(db, `csfiles_rooms/${roomId}/players`), { [playerName]: "waiting" });
                 return res.status(200).json({ success: true });
             }
         }
 
-        // ฟังก์ชันดึงสถานะห้องทั้งหมดกลับไปให้หน้าบ้านรันหน้าจอ
         if (action === 'getRoom') {
             const snapshot = await get(roomRef);
             const data = snapshot.val();
@@ -85,15 +80,12 @@ export default async function handler(req, res) {
             return res.status(200).json(data);
         }
 
-        // ฟังก์ชันกดเริ่มเกมจากหน้า Lobby ของหัวห้อง
         if (action === 'startGame') {
             const snapshot = await get(roomRef);
             const data = snapshot.val();
             if (data) {
                 let playersUpdate = {};
                 const playerNames = Object.keys(data.players);
-                
-                // สุ่มเลือก 1 คนเป็นฆาตกร (ไม่เอาคนที่เป็นนักพิสูจน์หลักฐาน)
                 let murdererName = playerNames.find(p => p !== data.forensic) || playerNames[0];
                 
                 playerNames.forEach(p => {
@@ -115,19 +107,16 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ฟังก์ชันสำหรับการกดเลือกคำใบ้บนกระดานชันสูตรสำหรับ Forensic
         if (action === 'selectTile') {
             await update(ref(db, `csfiles_rooms/${roomId}/selections`), { [tileId]: option });
             return res.status(200).json({ success: true });
         }
 
-        // ฟังก์ชันระบบรีเซ็ตคดีใหม่กลับสู่ค่าเริ่มต้น
         if (action === 'resetGame') {
             await set(roomRef, null);
             return res.status(200).json({ success: true });
         }
 
-        // ระบบส่งข้อมูลคำใบ้เพิ่มเติมของตัวเกม
         if (action === 'updateClues') {
             await update(ref(db, `csfiles_rooms/${roomId}/selections`), selectedClues);
             return res.status(200).json({ success: true });
