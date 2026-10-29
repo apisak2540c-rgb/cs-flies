@@ -32,8 +32,7 @@
 <body>
 
     <script>
-        // 1. ⚙️ ย้ายมาประกาศตัวแปรและฟังก์ชันหลักไว้ด้านบนสุด เพื่อป้องกันข้อผิดพลาดการหาฟังก์ชันไม่เจอ
-        // ⚠️ อย่าลืมคัดลอกลิงก์จากหน้า Vercel ของคุณมาวางแทนประโยคด้านล่างนี้ครับ!
+        // 🔒 ฝังลิงก์เซิร์ฟเวอร์ Vercel ของคุณให้เรียบร้อยแล้วครับ
         const BACKEND_URL = "https://cs-flies.vercel.app/api/game";
 
         let roomId = "";
@@ -90,6 +89,7 @@
                     const playerNames = data.players ? Object.keys(data.players) : [];
                     const startBtn = document.getElementById('start-btn');
                     
+                    // 🔒 ตรวจเช็คสิทธิ์ Host คนแรกสุดของห้องเพื่อเปิดสวิตช์ปุ่มเริ่มเกม
                     if (playerNames.length > 0 && playerNames[0] === myName) {
                         startBtn.style.display = 'block';
                     } else {
@@ -170,3 +170,4 @@
                 const pData = data.players[pName];
                 if(pData.role === "forensic") return;
                 const card = document.createElement('div');
+                card.className = 'player-card';
