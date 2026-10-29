@@ -7,7 +7,6 @@
     <style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #121216; color: #e0e0e6; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
         .card { background: #1c1c24; padding: 25px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); text-align: center; max-width: 850px; width: 100%; box-sizing: border-box; margin-bottom: 20px; border: 1px solid #2d2d3f; }
-        .hidden { display: none; }
         input, button { padding: 12px; font-size: 1rem; border-radius: 6px; border: none; margin: 8px 0; width: 100%; box-sizing: border-box; }
         input { background: #2d2d3f; color: #fff; text-align: center; }
         button { background-color: #c0392b; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -40,7 +39,7 @@
         <button id="join-btn">เข้าร่วมทีมสืบสวน</button>
     </div>
 
-    <div class="card hidden" id="lobby-screen">
+    <div class="card" id="lobby-screen" style="display: none;">
         <h3 id="room-display">ห้องหมายเลข: -</h3>
         <p style="color: #27ae60; font-weight: bold;">🔒 เชื่อมต่อผ่านระบบเรียบร้อยแล้ว</p>
         <p>กำลังรอนักสืบและผู้เชี่ยวชาญเข้าประจำการ...</p>
@@ -48,9 +47,9 @@
         <button id="start-btn" style="background-color: #27ae60; display: none;">เริ่มแจกแจงคดี!</button>
     </div>
 
-    <div class="card hidden" id="game-screen">
+    <div class="card" id="game-screen" style="display: none;">
         <div id="role-container"></div>
-        <div id="secret-reveal" class="alert-box hidden"></div>
+        <div id="secret-reveal" class="alert-box" style="display: none;"></div>
 
         <h3>📌 กระดานชันสูตรและบันทึกคดี</h3>
         <div id="forensic-display-board" class="forensic-board"></div>
@@ -62,7 +61,7 @@
     </div>
 
     <script>
-        const BACKEND_URL = "https://cs-flies.vercel.app/api/game";
+        const BACKEND_URL = "https://vercel.app";
 
         let roomId = "";
         let myName = "";
@@ -75,14 +74,28 @@
 
         function escapeHTML(str) {
             if (!str) return "";
-            return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[m]));
+            return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m]));
         }
+
+        // ผูก Event Listeners แก้อาการกดปุ่มแล้วเงียบ
+        document.getElementById('join-btn').addEventListener('click', () => {
+            callBackend('join');
+        });
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            callBackend('startGame');
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            callBackend('resetGame');
+        });
 
         async function callBackend(action, extraData = {}) {
             if (action === 'join') {
                 roomId = escapeHTML(document.getElementById('room-input').value.trim()).substring(0, 10);
                 myName = escapeHTML(document.getElementById('name-input').value.trim()).substring(0, 15);
                 if(!roomId || !myName) return alert("กรุณากรอกข้อมูลให้ครบ!");
+                
                 document.getElementById('setup-screen').style.display = 'none';
                 document.getElementById('lobby-screen').style.display = 'block';
                 document.getElementById('room-display').textContent = `คดีหมายเลขห้อง: ${roomId}`;
@@ -118,7 +131,7 @@
                     const playerNames = data.players ? Object.keys(data.players) : [];
                     const startBtn = document.getElementById('start-btn');
                     
-                    // 🔒 [แก้ไขด่วนสำเร็จ]: ดึงข้อมูลจากตำแหน่งแรกของลิสต์รายชื่อมาตรวจสอบอย่างถูกหลักการสากล
+                    // ปรับเงื่อนไขเช็กหัวห้องเพื่อเปิดปุ่มเริ่มเกม
                     if (playerNames.length > 0 && playerNames[0] === myName) {
                         startBtn.style.display = 'block';
                     } else {
@@ -137,37 +150,37 @@
                         
                         if (p === myName) {
                             el.textContent = `🕵️‍♂️ เจ้าหน้าที่: ${p} (ตัวคุณ)`;
-                            el.style.color = "#f1c40f"; 
+                            el.style.color = "#f1c40f";
                         } else {
                             el.textContent = `🕵️‍♂️ เจ้าหน้าที่: ${p}`;
                         }
                         listDiv.appendChild(el);
                     });
                 } else if (data.status === "playing") {
+                    document.getElementById('lobby-screen').style.display = 'none';
+                    document.getElementById('game-screen').style.display = 'block';
                     renderGame(data);
                 }
-            } catch(e) { console.error("การซิงค์ข้อมูลผิดพลาด:", e); }
+            } catch (e) { console.error("ซิงค์เกมล้มเหลว:", e); }
         }
 
+        // เพิ่มฟังก์ชันดึงข้อมูลมาวาดลง UI ตัวเต็มที่ขาดหายไป
         function renderGame(data) {
-            document.getElementById('lobby-screen').style.display = 'none';
-            document.getElementById('game-screen').style.display = 'block';
+            const roleContainer = document.getElementById('role-container');
+            const secretReveal = document.getElementById('secret-reveal');
+            const myData = data.players[myName];
 
-            const container = document.getElementById('role-container');
-            const secReveal = document.getElementById('secret-reveal');
-            const isForensic = data.forensic === myName;
+            if (myData && myData.role) {
+                let roleClass = "role-investigator";
+                let roleText = "นักสืบ (Investigator)";
+                if (data.forensic === myName) {
+                    roleClass = "role-forensic";
+                    roleText = "นักพิสูจน์หลักฐาน (Forensic Scientist)";
+                } else if (myData.role === "murderer") {
+                    roleClass = "role-murderer";
+                    roleText = "ฆาตกร (Murderer)";
+                }
 
-            container.innerHTML = "";
-            const badge = document.createElement('div');
-            badge.className = "role-badge";
-
-            if (isForensic) {
-                badge.className += " role-forensic"; badge.textContent = "🧠 คุณคือ: หัวหน้านักสืบ";
-                secReveal.textContent = `📢 เฉลยคดี: ฆาตกรคือ [ ${data.murderer} ] | อาวุธ: [ ${data.targetWeapon} ] | หลักฐาน: [ ${data.targetClue} ]`;
-                secReveal.classList.remove('hidden');
-            } else if (data.murderer === myName) {
-                badge.className += " role-murderer"; badge.textContent = "☠️ คุณคือ: ฆาตกร (Murderer)";
-                secReveal.textContent = `🤫 ความลับของคุณ: อาวุธ [ ${data.targetWeapon} ] | หลักฐาน [ ${data.targetClue} ]`;
-                secReveal.classList.remove('hidden');
-            } else {
-                badge.className += " role-investigator"; badge.textContent = "🔍 คุณคือ: นักสืบ";
+            </script>
+</body>
+</html>
