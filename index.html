@@ -31,7 +31,6 @@
 </head>
 <body>
 
-    <!-- 🏗️ ย้ายโครงสร้างเนื้อหาหลักมาไว้ด้านบนสุด เพื่อให้เบราว์เซอร์วาดปุ่มและหน้าจอขึ้นมาก่อนเสมอ หมดปัญหาจอว่าง -->
     <h1>🕵️‍♂️ CS-Files: Deception</h1>
 
     <div class="card" id="setup-screen">
@@ -43,7 +42,7 @@
 
     <div class="card hidden" id="lobby-screen">
         <h3 id="room-display">ห้องหมายเลข: -</h3>
-        <p style="color: #27ae60; font-weight: bold;">🔒 เชื่อมต่อเรียบร้อยแล้ว</p>
+        <p style="color: #27ae60; font-weight: bold;">🔒 เชื่อมต่อผ่านระบบเรียบร้อยแล้ว</p>
         <p>กำลังรอนักสืบและผู้เชี่ยวชาญเข้าประจำการ...</p>
         <div id="player-list" style="text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin: 15px 0;"></div>
         <button id="start-btn" style="background-color: #27ae60; display: none;">เริ่มแจกแจงคดี!</button>
@@ -119,7 +118,7 @@
                     const playerNames = data.players ? Object.keys(data.players) : [];
                     const startBtn = document.getElementById('start-btn');
                     
-                    // ⚙️ [ซ่อมเสร็จแล้ว]: เช็คชื่อผู้สร้างห้องจากสมาชิกคนแรกของอาร์เรย์ได้อย่างถูกต้อง แม่นยำ
+                    // 🔒 [แก้ไขด่วนสำเร็จ]: ดึงข้อมูลจากตำแหน่งแรกของลิสต์รายชื่อมาตรวจสอบอย่างถูกหลักการสากล
                     if (playerNames.length > 0 && playerNames[0] === myName) {
                         startBtn.style.display = 'block';
                     } else {
@@ -171,3 +170,4 @@
                 secReveal.textContent = `🤫 ความลับของคุณ: อาวุธ [ ${data.targetWeapon} ] | หลักฐาน [ ${data.targetClue} ]`;
                 secReveal.classList.remove('hidden');
             } else {
+                badge.className += " role-investigator"; badge.textContent = "🔍 คุณคือ: นักสืบ";
