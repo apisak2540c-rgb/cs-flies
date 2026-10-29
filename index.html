@@ -74,7 +74,7 @@
 
         function escapeHTML(str) {
             if (!str) return "";
-            return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m]));
+                return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m]));
         }
 
         // ผูก Event Listeners แก้อาการกดปุ่มแล้วเงียบ
