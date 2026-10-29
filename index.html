@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS-Files Online (Secured Backend)</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #121216; color: #e0e0e6; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .card { background: #1c1c24; padding: 25px; border-radius: 12px; max-width: 600px; width: 100%; text-align: center; border: 1px solid #2d2d3f; }
+        .hidden { display: none; }
+        input, button { padding: 12px; font-size: 1rem; border-radius: 6px; border: none; margin: 8px 0; width: 100%; box-sizing: border-box; }
+        input { background: #2d2d3f; color: #fff; text-align: center; }
+        button { background-color: #c0392b; color: white; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <h1>🕵️‍♂️ CS-Files Online (Secured Backend)</h1>
+
+    <div class="card" id="setup-screen">
+        <h3>เข้าสู่กองพิสูจน์หลักฐาน (ซ่อนคีย์หลังบ้าน)</h3>
+        <input type="text" id="room-input" placeholder="รหัสห้อง (เช่น 555)" maxlength="10">
+        <input type="text" id="name-input" placeholder="ชื่อเล่นของคุณ" maxlength="15">
+        <button onclick="joinGameBackend()">เข้าร่วมทีมสืบสวน</button>
+    </div>
+
+    <div class="card hidden" id="lobby-screen">
+        <h3 id="room-display">ห้องหมายเลข: -</h3>
+        <p style="color: #27ae60; font-weight: bold;">🔒 เชื่อมต่อผ่านระบบหลังบ้านที่ปลอดภัยเรียบร้อยแล้ว</p>
+        <p>รอโฮสต์กดเริ่มเกมในแอปพลิเคชัน...</p>
+    </div>
+
+    <script>
+        // ⚠️ เปลี่ยนเป็น URL ของแอป Vercel ที่คุณได้หลังจากอัปโหลดในขั้นตอนถัดไป
+        const BACKEND_URL = "https://vercel.app";
+
+        let roomId = "";
+        let myName = "";
+
+        async function joinGameBackend() {
+            roomId = document.getElementById('room-input').value.trim();
+            myName = document.getElementById('name-input').value.trim();
+
+            if(!roomId || !myName) return alert("กรุณากรอกข้อมูลให้ครบ!");
+
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('lobby-screen').style.display = 'block';
+            document.getElementById('room-display').textContent = `คดีหมายเลขห้อง: ${roomId}`;
+
+            // ส่งข้อมูลไปหาเซิร์ฟเวอร์คนกลาง (Vercel) แทนการต่อเข้า Firebase ตรงๆ
+            try {
+                const response = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'join',
+                        roomId: roomId,
+                        playerName: myName
+                    })
+                });
+                const result = await response.json();
+                console.log("ลงทะเบียนสำเร็จด้วยระบบหลังบ้านที่ปลอดภัย:", result);
+            } catch (error) {
+                console.error("การเชื่อมต่อหลังบ้านผิดพลาด:", error);
+            }
+        }
+    </script>
+</body>
+</html>
