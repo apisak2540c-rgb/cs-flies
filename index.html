@@ -31,42 +31,9 @@
 </head>
 <body>
 
-    <h1>🕵️‍♂️ CS-Files: Deception</h1>
-
-    <!-- ด่านแรก: ลงชื่อสร้างห้อง -->
-    <div class="card" id="setup-screen">
-        <h3>เข้าสู่กองพิสูจน์หลักฐาน (6-10 คน)</h3>
-        <input type="text" id="room-input" placeholder="รหัสห้อง (เช่น 555)" maxlength="10">
-        <input type="text" id="name-input" placeholder="ชื่อเล่นของคุณ" maxlength="15">
-        <button onclick="callBackend('join')">เข้าร่วมทีมสืบสวน</button>
-    </div>
-
-    <!-- ด่านสอง: ห้องนั่งรอ (Lobby) -->
-    <div class="card hidden" id="lobby-screen">
-        <h3 id="room-display">ห้องหมายเลข: -</h3>
-        <p style="color: #27ae60; font-weight: bold;">🔒 เชื่อมต่อเรียบร้อยแล้ว</p>
-        <p>กำลังรอนักสืบและผู้เชี่ยวชาญเข้าประจำการ...</p>
-        <div id="player-list" style="text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin: 15px 0;"></div>
-        <!-- ปุ่มเริ่มเกมสำหรับ Host -->
-        <button id="start-btn" onclick="callBackend('start')" style="background-color: #27ae60; display: none;">เริ่มแจกแจงคดี!</button>
-    </div>
-
-    <!-- ด่านสาม: กระดานเกมหลัก -->
-    <div class="card hidden" id="game-screen">
-        <div id="role-container"></div>
-        <div id="secret-reveal" class="alert-box hidden"></div>
-
-        <h3>📌 กระดานชันสูตรและบันทึกคดี</h3>
-        <div id="forensic-display-board" class="forensic-board"></div>
-
-        <h3>👥 หลักฐานทั้งหมดบนโต๊ะสืบสวน</h3>
-        <div class="players-board" id="game-players-grid"></div>
-
-        <button onclick="callBackend('reset')" style="background-color: #7f8c8d; margin-top: 25px; width: auto; padding: 10px 30px;">รีเซ็ตเริ่มคดีใหม่</button>
-    </div>
-
     <script>
-        // ⚠️ สำคัญที่สุด: ใส่ URL ของแอป Vercel ของคุณแทนที่ลิงก์จำลองด้านล่างนี้
+        // 1. ⚙️ ย้ายมาประกาศตัวแปรและฟังก์ชันหลักไว้ด้านบนสุด เพื่อป้องกันข้อผิดพลาดการหาฟังก์ชันไม่เจอ
+        // ⚠️ อย่าลืมคัดลอกลิงก์จากหน้า Vercel ของคุณมาวางแทนประโยคด้านล่างนี้ครับ!
         const BACKEND_URL = "https://cs-flies.vercel.app/api/game";
 
         let roomId = "";
@@ -92,7 +59,6 @@
                 document.getElementById('lobby-screen').style.display = 'block';
                 document.getElementById('room-display').textContent = `คดีหมายเลขห้อง: ${roomId}`;
                 
-                // เริ่มระบบลูปดึงข้อมูลอัปเดตสถานะห้องทุกๆ 2 วินาที (Real-time Sync)
                 setInterval(syncGame, 2000);
             }
 
@@ -115,11 +81,8 @@
                 });
                 const data = await res.json();
                 
-                if (!data || data.status === "none") {
-                    return;
-                }
+                if (!data || data.status === "none") return;
 
-                // 1. ตรวจสอบสถานะและอัปเดตข้อมูลหน้าห้องนั่งรอ (Lobby)
                 if (data.status === "lobby") {
                     document.getElementById('lobby-screen').style.display = 'block';
                     document.getElementById('game-screen').style.display = 'none';
@@ -127,14 +90,12 @@
                     const playerNames = data.players ? Object.keys(data.players) : [];
                     const startBtn = document.getElementById('start-btn');
                     
-                    // ปลดล็อกเปิดปุ่มเริ่มเกมให้เฉพาะคนสร้างห้องคนแรก (Host)
                     if (playerNames.length > 0 && playerNames[0] === myName) {
                         startBtn.style.display = 'block';
                     } else {
                         startBtn.style.display = 'none';
                     }
 
-                    // อัปเดตรายชื่อคนเข้าห้องขึ้นหน้าจอ
                     const listDiv = document.getElementById('player-list');
                     listDiv.innerHTML = "";
                     playerNames.forEach(p => {
@@ -153,14 +114,10 @@
                         }
                         listDiv.appendChild(el);
                     });
-                } 
-                // 2. ถ้าเข้าโหมดเริ่มเล่นเกมแล้ว ให้เปลี่ยนไปรันหน้ากระดานชันสูตร
-                else if (data.status === "playing") {
+                } else if (data.status === "playing") {
                     renderGame(data);
                 }
-            } catch(e) {
-                console.error("การซิงค์ข้อมูลผิดพลาด:", e);
-            }
+            } catch(e) { console.error("การซิงค์ข้อมูลผิดพลาด:", e); }
         }
 
         function renderGame(data) {
@@ -177,3 +134,39 @@
 
             if (isForensic) {
                 badge.className += " role-forensic"; badge.textContent = "🧠 คุณคือ: หัวหน้านักสืบ";
+                secReveal.textContent = `📢 เฉลยคดี: ฆาตกรคือ [ ${data.murderer} ] | อาวุธ: [ ${data.targetWeapon} ] | หลักฐาน: [ ${data.targetClue} ]`;
+                secReveal.classList.remove('hidden');
+            } else if (data.murderer === myName) {
+                badge.className += " role-murderer"; badge.textContent = "☠️ คุณคือ: ฆาตกร (Murderer)";
+                secReveal.textContent = `🤫 ความลับของคุณ: อาวุธ [ ${data.targetWeapon} ] | หลักฐาน [ ${data.targetClue} ]`;
+                secReveal.classList.remove('hidden');
+            } else {
+                badge.className += " role-investigator"; badge.textContent = "🔍 คุณคือ: นักสืบ";
+                secReveal.classList.add('hidden');
+            }
+            container.appendChild(badge);
+
+            const board = document.getElementById('forensic-display-board');
+            board.innerHTML = "";
+            forensicTiles.forEach(tile => {
+                const tileDiv = document.createElement('div');
+                tileDiv.className = "tile";
+                tileDiv.innerHTML = `<div class="tile-title">${tile.title}</div>`;
+                tile.options.forEach(opt => {
+                    const optDiv = document.createElement('div');
+                    optDiv.className = `tile-option ${data.selectedClues && data.selectedClues[tile.id] === opt ? 'selected' : ''}`;
+                    optDiv.textContent = opt;
+                    if(isForensic) {
+                        optDiv.onclick = () => callBackend('updateClue', { tileId: tile.id, optValue: opt });
+                    }
+                    tileDiv.appendChild(optDiv);
+                });
+                board.appendChild(tileDiv);
+            });
+
+            const grid = document.getElementById('game-players-grid');
+            grid.innerHTML = "";
+            Object.keys(data.players).forEach(pName => {
+                const pData = data.players[pName];
+                if(pData.role === "forensic") return;
+                const card = document.createElement('div');
