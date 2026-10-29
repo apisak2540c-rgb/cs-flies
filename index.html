@@ -3,67 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CS-Files Online (Secured Backend)</title>
+    <title>CS-Files Online</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background-color: #121216; color: #e0e0e6; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .card { background: #1c1c24; padding: 25px; border-radius: 12px; max-width: 600px; width: 100%; text-align: center; border: 1px solid #2d2d3f; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #121216; color: #e0e0e6; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
+        .card { background: #1c1c24; padding: 25px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); text-align: center; max-width: 850px; width: 100%; box-sizing: border-box; margin-bottom: 20px; border: 1px solid #2d2d3f; }
         .hidden { display: none; }
         input, button { padding: 12px; font-size: 1rem; border-radius: 6px; border: none; margin: 8px 0; width: 100%; box-sizing: border-box; }
         input { background: #2d2d3f; color: #fff; text-align: center; }
-        button { background-color: #c0392b; color: white; font-weight: bold; cursor: pointer; }
+        button { background-color: #c0392b; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background-color: #a93226; }
+        .players-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin: 20px 0; }
+        .player-card { background: #252533; border: 1px solid #3b3b4f; border-radius: 8px; padding: 12px; text-align: left; }
+        .evidence-tag { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; margin: 3px; font-weight: bold; }
+        .ev-weapon { background-color: #761c19; color: #ff9f9b; } 
+        .ev-clue { background-color: #1b4d3e; color: #9bffd9; } 
+        .forensic-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 20px 0; }
+        .tile { background: #2a2a3a; padding: 10px; border-radius: 6px; border: 1px solid #444; font-size: 0.9rem; text-align: left; }
+        .tile-title { font-weight: bold; color: #f1c40f; margin-bottom: 5px; font-size: 0.85rem; }
+        .tile-option { padding: 4px 8px; margin: 2px 0; border-radius: 4px; cursor: pointer; font-size: 0.8rem; background: #333; }
+        .tile-option.selected { background: #27ae60 !important; color: white; font-weight: bold; }
+        .role-badge { font-size: 1.4rem; font-weight: bold; padding: 10px 20px; border-radius: 6px; display: inline-block; margin-bottom: 15px; }
+        .role-forensic { background: #2980b9; color: white; }
+        .role-murderer { background: #c0392b; color: white; }
+        .role-investigator { background: #27ae60; color: white; }
+        .alert-box { background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; padding: 12px; border-radius: 6px; margin: 15px 0; color: #ff7675; font-weight: bold; text-align: left; }
     </style>
 </head>
 <body>
 
-    <h1>🕵️‍♂️ CS-Files Online (Secured Backend)</h1>
+    <h1>🕵️‍♂️ CS-Files: Deception</h1>
 
+    <!-- ด่านแรก: ลงชื่อสร้างห้อง -->
     <div class="card" id="setup-screen">
-        <h3>เข้าสู่กองพิสูจน์หลักฐาน (ซ่อนคีย์หลังบ้าน)</h3>
+        <h3>เข้าสู่กองพิสูจน์หลักฐาน (6-10 คน)</h3>
         <input type="text" id="room-input" placeholder="รหัสห้อง (เช่น 555)" maxlength="10">
         <input type="text" id="name-input" placeholder="ชื่อเล่นของคุณ" maxlength="15">
-        <button onclick="joinGameBackend()">เข้าร่วมทีมสืบสวน</button>
+        <button onclick="callBackend('join')">เข้าร่วมทีมสืบสวน</button>
     </div>
 
+    <!-- ด่านสอง: ห้องนั่งรอ (Lobby) -->
     <div class="card hidden" id="lobby-screen">
         <h3 id="room-display">ห้องหมายเลข: -</h3>
-        <p style="color: #27ae60; font-weight: bold;">🔒 เชื่อมต่อผ่านระบบหลังบ้านที่ปลอดภัยเรียบร้อยแล้ว</p>
-        <p>รอโฮสต์กดเริ่มเกมในแอปพลิเคชัน...</p>
+        <p style="color: #27ae60; font-weight: bold;">🔒 เชื่อมต่อเรียบร้อยแล้ว</p>
+        <p>กำลังรอนักสืบและผู้เชี่ยวชาญเข้าประจำการ...</p>
+        <div id="player-list" style="text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin: 15px 0;"></div>
+        <!-- ปุ่มเริ่มเกมสำหรับ Host -->
+        <button id="start-btn" onclick="callBackend('start')" style="background-color: #27ae60; display: none;">เริ่มแจกแจงคดี!</button>
+    </div>
+
+    <!-- ด่านสาม: กระดานเกมหลัก -->
+    <div class="card hidden" id="game-screen">
+        <div id="role-container"></div>
+        <div id="secret-reveal" class="alert-box hidden"></div>
+
+        <h3>📌 กระดานชันสูตรและบันทึกคดี</h3>
+        <div id="forensic-display-board" class="forensic-board"></div>
+
+        <h3>👥 หลักฐานทั้งหมดบนโต๊ะสืบสวน</h3>
+        <div class="players-board" id="game-players-grid"></div>
+
+        <button onclick="callBackend('reset')" style="background-color: #7f8c8d; margin-top: 25px; width: auto; padding: 10px 30px;">รีเซ็ตเริ่มคดีใหม่</button>
     </div>
 
     <script>
-        // ⚠️ เปลี่ยนเป็น URL ของแอป Vercel ที่คุณได้หลังจากอัปโหลดในขั้นตอนถัดไป
+        // ⚠️ สำคัญที่สุด: ใส่ URL ของแอป Vercel ของคุณแทนที่ลิงก์จำลองด้านล่างนี้
         const BACKEND_URL = "https://cs-flies.vercel.app/api/game";
 
         let roomId = "";
         let myName = "";
+        const forensicTiles = [
+            { id: "location", title: "สถานที่เกิดเหตุ", options: ["บ้านพัก", "โรงแรม", "ผับ/บาร์", "ที่ทำงาน", "ที่สาธารณะ", "ยานพาหนะ"] },
+            { id: "cause", title: "สาเหตุการตาย", options: ["ขาดอากาศ", "เสียเลือดมาก", "สารพิษ/ยาเกินขนาด", "บาดแผลถูกกระแทก", "อวัยวะล้มเหลว"] },
+            { id: "body", title: "สภาพของศพ", options: ["เสื้อผ้าเรียบร้อย", "บิดเบี้ยวผิดธรรมชาติ", "นิ่งสงบเหมือนหลับ", "อุณหภูมิผิดปกติ", "มีร่องรอยการดิ้นรน"] },
+            { id: "motive", title: "แรงจูงใจ", options: ["มรดก/เงินทอง", "ความแค้นชำระสะสาง", "ชู้สาว/ความรัก", "ป้องกันตัว", "ปิดปากพยาน"] }
+        ];
 
-        async function joinGameBackend() {
-            roomId = document.getElementById('room-input').value.trim();
-            myName = document.getElementById('name-input').value.trim();
+        function escapeHTML(str) {
+            if (!str) return "";
+            return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[m]));
+        }
 
-            if(!roomId || !myName) return alert("กรุณากรอกข้อมูลให้ครบ!");
+        async function callBackend(action, extraData = {}) {
+            if (action === 'join') {
+                roomId = escapeHTML(document.getElementById('room-input').value.trim()).substring(0, 10);
+                myName = escapeHTML(document.getElementById('name-input').value.trim()).substring(0, 15);
+                if(!roomId || !myName) return alert("กรุณากรอกข้อมูลให้ครบ!");
+                document.getElementById('setup-screen').style.display = 'none';
+                document.getElementById('lobby-screen').style.display = 'block';
+                document.getElementById('room-display').textContent = `คดีหมายเลขห้อง: ${roomId}`;
+                
+                // เริ่มระบบลูปดึงข้อมูลอัปเดตสถานะห้องทุกๆ 2 วินาที (Real-time Sync)
+                setInterval(syncGame, 2000);
+            }
 
-            document.getElementById('setup-screen').style.display = 'none';
-            document.getElementById('lobby-screen').style.display = 'block';
-            document.getElementById('room-display').textContent = `คดีหมายเลขห้อง: ${roomId}`;
-
-            // ส่งข้อมูลไปหาเซิร์ฟเวอร์คนกลาง (Vercel) แทนการต่อเข้า Firebase ตรงๆ
             try {
-                const response = await fetch(BACKEND_URL, {
+                await fetch(BACKEND_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'join',
-                        roomId: roomId,
-                        playerName: myName
-                    })
+                    body: JSON.stringify({ action, roomId, playerName: myName, ...extraData })
                 });
-                const result = await response.json();
-                console.log("ลงทะเบียนสำเร็จด้วยระบบหลังบ้านที่ปลอดภัย:", result);
-            } catch (error) {
-                console.error("การเชื่อมต่อหลังบ้านผิดพลาด:", error);
+            } catch (e) { console.error("ระบบหลังบ้านขัดข้อง:", e); }
+        }
+
+        async function syncGame() {
+            if (!roomId) return;
+            try {
+                const res = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'getRoom', roomId })
+                });
+                const data = await res.json();
+                
+                if (!data || data.status === "none") {
+                    return;
+                }
+
+                // 1. ตรวจสอบสถานะและอัปเดตข้อมูลหน้าห้องนั่งรอ (Lobby)
+                if (data.status === "lobby") {
+                    document.getElementById('lobby-screen').style.display = 'block';
+                    document.getElementById('game-screen').style.display = 'none';
+                    
+                    const playerNames = data.players ? Object.keys(data.players) : [];
+                    const startBtn = document.getElementById('start-btn');
+                    
+                    // ปลดล็อกเปิดปุ่มเริ่มเกมให้เฉพาะคนสร้างห้องคนแรก (Host)
+                    if (playerNames.length > 0 && playerNames[0] === myName) {
+                        startBtn.style.display = 'block';
+                    } else {
+                        startBtn.style.display = 'none';
+                    }
+
+                    // อัปเดตรายชื่อคนเข้าห้องขึ้นหน้าจอ
+                    const listDiv = document.getElementById('player-list');
+                    listDiv.innerHTML = "";
+                    playerNames.forEach(p => {
+                        const el = document.createElement('div');
+                        el.style.padding = "6px 10px";
+                        el.style.margin = "4px 0";
+                        el.style.background = "rgba(255,255,255,0.05)";
+                        el.style.borderRadius = "4px";
+                        el.style.fontSize = "1.1rem";
+                        
+                        if (p === myName) {
+                            el.textContent = `🕵️‍♂️ เจ้าหน้าที่: ${p} (ตัวคุณ)`;
+                            el.style.color = "#f1c40f"; 
+                        } else {
+                            el.textContent = `🕵️‍♂️ เจ้าหน้าที่: ${p}`;
+                        }
+                        listDiv.appendChild(el);
+                    });
+                } 
+                // 2. ถ้าเข้าโหมดเริ่มเล่นเกมแล้ว ให้เปลี่ยนไปรันหน้ากระดานชันสูตร
+                else if (data.status === "playing") {
+                    renderGame(data);
+                }
+            } catch(e) {
+                console.error("การซิงค์ข้อมูลผิดพลาด:", e);
             }
         }
-    </script>
-</body>
-</html>
+
+        function renderGame(data) {
+            document.getElementById('lobby-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+
+            const container = document.getElementById('role-container');
+            const secReveal = document.getElementById('secret-reveal');
+            const isForensic = data.forensic === myName;
+
+            container.innerHTML = "";
+            const badge = document.createElement('div');
+            badge.className = "role-badge";
+
+            if (isForensic) {
+                badge.className += " role-forensic"; badge.textContent = "🧠 คุณคือ: หัวหน้านักสืบ";
