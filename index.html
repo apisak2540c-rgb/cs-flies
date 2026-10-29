@@ -74,10 +74,9 @@
 
         function escapeHTML(str) {
             if (!str) return "";
-                return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m]));
+            return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m]));
         }
 
-        // ผูก Event Listeners แก้อาการกดปุ่มแล้วเงียบ
         document.getElementById('join-btn').addEventListener('click', () => {
             callBackend('join');
         });
@@ -131,7 +130,6 @@
                     const playerNames = data.players ? Object.keys(data.players) : [];
                     const startBtn = document.getElementById('start-btn');
                     
-                    // ปรับเงื่อนไขเช็กหัวห้องเพื่อเปิดปุ่มเริ่มเกม
                     if (playerNames.length > 0 && playerNames[0] === myName) {
                         startBtn.style.display = 'block';
                     } else {
@@ -164,7 +162,6 @@
             } catch (e) { console.error("ซิงค์เกมล้มเหลว:", e); }
         }
 
-        // เพิ่มฟังก์ชันดึงข้อมูลมาวาดลง UI ตัวเต็มที่ขาดหายไป
         function renderGame(data) {
             const roleContainer = document.getElementById('role-container');
             const secretReveal = document.getElementById('secret-reveal');
@@ -181,6 +178,68 @@
                     roleText = "ฆาตกร (Murderer)";
                 }
 
-            </script>
+                roleContainer.innerHTML = `<span class="role-badge ${roleClass}">บทบาทของคุณ: ${roleText}</span>`;
+                
+                if (myData.role === "murderer" && data.clue && data.weapon) {
+                    secretReveal.style.display = "block";
+                    secretReveal.innerHTML = `⚠️ หลักฐานที่คุณใช้ก่อคดี: <span class="evidence-tag ev-weapon">${data.weapon}</span> และ <span class="evidence-tag ev-clue">${data.clue}</span> (ห้ามให้ใครรู้!)`;
+                } else if (data.forensic === myName && data.clue && data.weapon) {
+                    secretReveal.style.display = "block";
+                    secretReveal.innerHTML = `🔎 ข้อมูลคดีลับ: ฆาตกรใช้ <span class="evidence-tag ev-weapon">${data.weapon}</span> และ <span class="evidence-tag ev-clue">${data.clue}</span> ชี้เป้าให้ถูกตัว!`;
+                } else {
+                    secretReveal.style.display = "none";
+                }
+            }
+
+            const forensicBoard = document.getElementById('forensic-display-board');
+            forensicBoard.innerHTML = "";
+            forensicTiles.forEach(tile => {
+                const tileEl = document.createElement('div');
+                tileEl.className = "tile";
+                tileEl.innerHTML = `<div class="tile-title">${tile.title}</div>`;
+                
+                tile.options.forEach(opt => {
+                    const optEl = document.createElement('div');
+                    optEl.className = "tile-option";
+                    optEl.textContent = opt;
+                    
+                    if (data.selections && data.selections[tile.id] === opt) {
+                        optEl.classList.add('selected');
+                    }
+
+                    if (data.forensic === myName) {
+                        optEl.addEventListener('click', () => {
+                            callBackend('selectTile', { tileId: tile.id, option: opt });
+                        });
+                    }
+                    tileEl.appendChild(optEl);
+                });
+                forensicBoard.appendChild(tileEl);
+            });
+
+            const playersGrid = document.getElementById('game-players-grid');
+            playersGrid.innerHTML = "";
+            Object.keys(data.players).forEach(p => {
+                const pData = data.players[p];
+                if (p === data.forensic) return;
+
+                const pCard = document.createElement('div');
+                pCard.className = "player-card";
+                pCard.innerHTML = `<strong>${p}</strong> ${p === myName ? '(ตัวคุณ)' : ''}<br><div style="margin-top:5px;"></div>`;
+                
+                if (pData.weapons) {
+                    pData.weapons.forEach(w => {
+                        pCard.innerHTML += `<span class="evidence-tag ev-weapon">${w}</span>`;
+                    });
+                }
+                if (pData.clues) {
+                    pData.clues.forEach(c => {
+                        pCard.innerHTML += `<span class="evidence-tag ev-clue">${c}</span>`;
+                    });
+                }
+                playersGrid.appendChild(pCard);
+            });
+        }
+    </script>
 </body>
 </html>
