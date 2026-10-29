@@ -12,38 +12,45 @@ const firebaseConfig = {
     appId: process.env.FIREBASE_APP_ID
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
 export default async function handler(req, res) {
-    // 🛠️ 1. ตั้งค่า CORS ปลดล็อกเสรีให้หน้าบ้านเรียกใช้งานได้อย่างถูกต้อง
+    // 🛠️ 1. [การันตี CORS ผ่านแน่]: ส่งค่า Headers ออกไปตั้งแต่บรรทัดแรกสุดของตัวฟังก์ชัน
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Content-Type');
 
-    // 🛠️ 2. ปลดล็อกด่านแรก (Preflight) ให้เบราว์เซอร์ผ่านฉลุย
+    // 🛠️ 2. ดักจับและตอบกลับ Preflight Request (OPTIONS) ทันทีโดยไม่ต้องรัน Logic ด้านล่าง
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
-    // ทำการตรวจสอบและแปลงข้อมูล Body ป้องกันกรณีข้อมูลส่งมาเป็น String
+    // 🛠️ 3. ย้ายการเปิดใช้งานเซิร์ฟเวอร์ Firebase เข้ามาอยู่ในตัวฟังก์ชันเพื่อป้องกันระบบแคชของ Serverless ค้าง
+    let app, db;
+    try {
+        app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+    } catch (firebaseErr) {
+        console.error("Firebase Initialization Failed:", firebaseErr);
+        return res.status(500).json({ error: "เซิร์ฟเวอร์ฐานข้อมูลหลังบ้านทำงานขัดข้อง" });
+    }
+
+    // ทำการตรวจสอบและแปลงข้อมูลข้อมูลนำเข้าจากหน้าบ้านป้องกันการส่งข้อมูลหลุดรูปแบบ
     let bodyData = req.body;
     if (typeof bodyData === 'string') {
         try {
             bodyData = JSON.parse(bodyData);
         } catch (e) {
-            return res.status(400).json({ error: "Invalid JSON body" });
+            return res.status(400).json({ error: "รูปแบบ JSON ไม่ถูกต้อง" });
         }
     }
 
     const { action, roomId, playerName, selectedClues, tileId, option } = bodyData;
 
-    if (!roomId) return res.status(400).json({ error: "Missing roomId" });
+    if (!roomId) return res.status(400).json({ error: "ไม่พบข้อมูลหมายเลขรหัสห้อง (Missing roomId)" });
     const roomRef = ref(db, 'csfiles_rooms/' + roomId);
 
     try {
-        // [แก้ไขเพิ่มเติม]: ระบบสร้างหรือเข้าห้องเกม
+        // เงื่อนไขในการสร้างหรือเข้าห้องเกมออนไลน์
         if (action === 'join') {
             const snapshot = await get(roomRef);
             const data = snapshot.val();
@@ -68,7 +75,7 @@ export default async function handler(req, res) {
             }
         }
 
-        // 🛠️ [จุดที่ขาดหายไปอันดับ 1]: ฟังก์ชันส่งข้อมูลห้องทั้งหมดกลับไปให้หน้าบ้านรัน syncGame
+        // ฟังก์ชันดึงสถานะห้องทั้งหมดกลับไปให้หน้าบ้านรันหน้าจอ
         if (action === 'getRoom') {
             const snapshot = await get(roomRef);
             const data = snapshot.val();
@@ -78,12 +85,11 @@ export default async function handler(req, res) {
             return res.status(200).json(data);
         }
 
-        // 🛠️ [จุดที่ขาดหายไปอันดับ 2]: ฟังก์ชันกดเริ่มเกมจากหน้า Lobby
+        // ฟังก์ชันกดเริ่มเกมจากหน้า Lobby ของหัวห้อง
         if (action === 'startGame') {
             const snapshot = await get(roomRef);
             const data = snapshot.val();
             if (data) {
-                // สุ่มแจกบทบาทและอาวุธเบื้องต้นให้กับผู้เล่นใน Firebase
                 let playersUpdate = {};
                 const playerNames = Object.keys(data.players);
                 
@@ -101,7 +107,7 @@ export default async function handler(req, res) {
                 await update(ref(db, `csfiles_rooms/${roomId}`), {
                     status: "playing",
                     murderer: murdererName,
-                    weapon: "มีดปลอกผลไม้", // ตัวอย่างการล็อกหลักฐานคดี
+                    weapon: "มีดปลอกผลไม้",
                     clue: "รอยเลือด",
                     players: playersUpdate
                 });
@@ -109,19 +115,19 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // 🛠️ [จุดที่ขาดหายไปอันดับ 3]: ฟังก์ชันสำหรับการกดเลือกคำใบ้บนกระดานชันสูตร
+        // ฟังก์ชันสำหรับการกดเลือกคำใบ้บนกระดานชันสูตรสำหรับ Forensic
         if (action === 'selectTile') {
             await update(ref(db, `csfiles_rooms/${roomId}/selections`), { [tileId]: option });
             return res.status(200).json({ success: true });
         }
 
-        // ฟังก์ชันระบบรีเซ็ตคดีใหม่
+        // ฟังก์ชันระบบรีเซ็ตคดีใหม่กลับสู่ค่าเริ่มต้น
         if (action === 'resetGame') {
             await set(roomRef, null);
             return res.status(200).json({ success: true });
         }
 
-        // ระบบสำหรับส่งข้อมูลคำใบ้เพิ่มเติม (เผื่อขยายสิทธิ์)
+        // ระบบส่งข้อมูลคำใบ้เพิ่มเติมของตัวเกม
         if (action === 'updateClues') {
             await update(ref(db, `csfiles_rooms/${roomId}/selections`), selectedClues);
             return res.status(200).json({ success: true });
