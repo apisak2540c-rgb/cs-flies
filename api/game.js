@@ -11,6 +11,27 @@ const firebaseConfig = {
     appId: process.env.FIREBASE_APP_ID
 };
 
+// 🎯 คลังคำศัพท์บอร์ดเกม CS-Files มาตรฐานสากลสำหรับสุ่มแจกการ์ดผู้เล่น
+const WEAPONS_POOL = [
+    "มีดปลอกผลไม้", "ยาพิษ", "ปืนพก", "เชือกผ้า", "ค้อนเหล็ก", 
+    "ไม้หน้าสาม", "สายไฟ", "หมอนหนุน", "อิฐบล็อก", "ขวานจาม",
+    "เศษแก้ว", "ของมีคม", "น้ำยาล้างห้องน้ำ", "กระแสไฟฟ้า", "กรรไกรตัดผ้า",
+    "ประแจคอม้า", "ลูกซองจู่โจม", "คัตเตอร์", "ท่อเหล็ก", "สารเคมี"
+];
+
+const CLUES_POOL = [
+    "รอยเลือด", "จดหมาย", "เส้นผม", "ไดอารี่", "นาฬิกาข้อมือ", 
+    "แหวนทอง", "ลิปสติก", "ขวดเหล้า", "ก้นบุหรี่", "แก้วกาแฟ",
+    "ตั๋วรถไฟ", "ผ้าเช็ดหน้า", "รูปถ่าย", "แว่นตา", "หน้ากากอนามัย",
+    "พวงกุญแจ", "กระเป๋าสตางค์", "ถุงมือยาง", "เศษดิน", "รอยเท้า"
+];
+
+// ฟังก์ชันสำหรับสุ่มหยิบการ์ดจากคลังคำศัพท์แบบไม่ซ้ำกัน
+function getRandomItems(pool, count) {
+    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, count);
+}
+
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -35,15 +56,13 @@ export default async function handler(req, res) {
     if (typeof bodyData === 'string' && bodyData.trim() !== '') {
         try {
             bodyData = JSON.parse(bodyData);
-        } catch (e) {
-            // ดักจับข้อมูลแปลงร่าง
-        }
+        } catch (e) {}
     }
 
     if (!bodyData) bodyData = {};
-    const { action, roomId, playerName, selectedClues, tileId, option } = bodyData;
+    const { action, roomId, playerName, tileId, option } = bodyData;
 
-    if (!roomId) return res.status(200).json({ error: "ไม่พบรหัสห้อง (Missing roomId)" });
+    if (!roomId) return res.status(200).json({ error: "Missing roomId" });
     const roomRef = ref(db, 'csfiles_rooms/' + roomId);
 
     try {
@@ -56,8 +75,8 @@ export default async function handler(req, res) {
                     status: "lobby",
                     forensic: playerName, 
                     murderer: "", 
-                    targetWeapon: "", 
-                    targetClue: "",
+                    weapon: "", 
+                    clue: "",
                     selections: { location: "", cause: "", body: "", motive: "" },
                     players: { [playerName]: "waiting" }
                 };
@@ -72,9 +91,7 @@ export default async function handler(req, res) {
         if (action === 'getRoom') {
             const snapshot = await get(roomRef);
             const data = snapshot.val();
-            if (!data) {
-                return res.status(200).json({ status: "none" });
-            }
+            if (!data) return res.status(200).json({ status: "none" });
             return res.status(200).json(data);
         }
 
@@ -84,21 +101,37 @@ export default async function handler(req, res) {
             if (data) {
                 let playersUpdate = {};
                 const playerNames = Object.keys(data.players);
-                let murdererName = playerNames.find(p => p !== data.forensic) || playerNames;
                 
+                // 1. สุ่มเลือกผู้เล่น 1 คนให้มารับบทเป็นฆาตกร (หลีกเลี่ยงคนที่เป็นคนชันสูตรหลักฐาน)
+                let murdererName = playerNames.find(p => p !== data.forensic) || playerNames[0];
+                
+                let selectedWeapon = "";
+                let selectedClue = "";
+
+                // 2. ลูปแจกแจงการ์ดแบบสุ่มคำศัพท์ไม่ซ้ำกันให้เจ้าหน้าที่สืบสวนแต่ละนาย
                 playerNames.forEach(p => {
+                    const assignedWeapons = getRandomItems(WEAPONS_POOL, 4);
+                    const assignedClues = getRandomItems(CLUES_POOL, 4);
+
+                    // เก็บเป้าหมายคดีหลักฐานลับของฆาตกรที่สุ่มได้จากการ์ดในมือของฆาตกรคนนั้น
+                    if (p === murdererName) {
+                        selectedWeapon = assignedWeapons[0];
+                        selectedClue = assignedClues[0];
+                    }
+
                     playersUpdate[p] = {
                         role: p === murdererName ? "murderer" : (p === data.forensic ? "forensic" : "investigator"),
-                        weapons: ["มีดปลอกผลไม้", "ยาพิษ", "ปืนพก", "เชือกผ้า"],
-                        clues: ["รอยเลือด", "จดหมาย", "เส้นผม", "ไดอารี่"]
+                        weapons: assignedWeapons,
+                        clues: assignedClues
                     };
                 });
 
+                // 3. บันทึกข้อมูลคดีหลักฐานลับลงในฐานข้อมูล Firebase
                 await update(ref(db, `csfiles_rooms/${roomId}`), {
                     status: "playing",
                     murderer: murdererName,
-                    weapon: "มีดปลอกผลไม้",
-                    clue: "รอยเลือด",
+                    weapon: selectedWeapon,
+                    clue: selectedClue,
                     players: playersUpdate
                 });
             }
@@ -115,14 +148,9 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        if (action === 'updateClues') {
-            await update(ref(db, `csfiles_rooms/${roomId}/selections`), selectedClues);
-            return res.status(200).json({ success: true });
-        }
-
         return res.status(200).json({ status: "ok" });
 
     } catch (error) {
-        return res.status(200).json({ error: error.message });
+        return res.status(500).json({ error: error.message });
     }
 }
