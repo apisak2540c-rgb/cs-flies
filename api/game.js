@@ -11,25 +11,11 @@ const firebaseConfig = {
     appId: process.env.FIREBASE_APP_ID
 };
 
-// 🎯 คลังคำศัพท์บอร์ดเกม CS-Files มาตรฐานสากลสำหรับสุ่มแจกการ์ดผู้เล่น
-const WEAPONS_POOL = [
-    "มีดปลอกผลไม้", "ยาพิษ", "ปืนพก", "เชือกผ้า", "ค้อนเหล็ก", 
-    "ไม้หน้าสาม", "สายไฟ", "หมอนหนุน", "อิฐบล็อก", "ขวานจาม",
-    "เศษแก้ว", "ของมีคม", "น้ำยาล้างห้องน้ำ", "กระแสไฟฟ้า", "กรรไกรตัดผ้า",
-    "ประแจคอม้า", "ลูกซองจู่โจม", "คัตเตอร์", "ท่อเหล็ก", "สารเคมี"
-];
+const WEAPONS_POOL = ["มีดปลอกผลไม้", "ยาพิษ", "ปืนพก", "เชือกผ้า", "ค้อนเหล็ก", "ไม้หน้าสาม", "สายไฟ", "หมอนหนุน", "อิฐบล็อก", "ขวานจาม"];
+const CLUES_POOL = ["รอยเลือด", "จดหมาย", "เส้นผม", "ไดอารี่", "นาฬิกาข้อมือ", "แหวนทอง", "ลิปสติก", "ขวดเหล้า", "ก้นบุหรี่", "แก้วกาแฟ"];
 
-const CLUES_POOL = [
-    "รอยเลือด", "จดหมาย", "เส้นผม", "ไดอารี่", "นาฬิกาข้อมือ", 
-    "แหวนทอง", "ลิปสติก", "ขวดเหล้า", "ก้นบุหรี่", "แก้วกาแฟ",
-    "ตั๋วรถไฟ", "ผ้าเช็ดหน้า", "รูปถ่าย", "แว่นตา", "หน้ากากอนามัย",
-    "พวงกุญแจ", "กระเป๋าสตางค์", "ถุงมือยาง", "เศษดิน", "รอยเท้า"
-];
-
-// ฟังก์ชันสำหรับสุ่มหยิบการ์ดจากคลังคำศัพท์แบบไม่ซ้ำกัน
 function getRandomItems(pool, count) {
-    const shuffled = [...pool].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, count);
+    return [...pool].sort(() => 0.5 - Math.random()).slice(0, count);
 }
 
 export default async function handler(req, res) {
@@ -39,60 +25,47 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Content-Type, Authorization');
     res.setHeader('Vary', 'Origin');
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
+    if (req.method === 'OPTIONS') return res.status(200).end();
+
+    let bodyData = req.body;
+    if (typeof bodyData === 'string' && bodyData.trim() !== '') {
+        try { bodyData = JSON.parse(bodyData); } catch (e) {}
     }
+
+    if (!bodyData) bodyData = {};
+    const { action, roomId, playerName, weapon, clue, tileId, option, targetPlayer, accusedWeapon, accusedClue } = bodyData;
+
+    if (!roomId) return res.status(200).json({ error: "Missing roomId" });
+    const roomRef = ref(db, 'csfiles_rooms/' + roomId);
 
     let app, db;
     try {
         app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
         db = getDatabase(app);
-    } catch (firebaseErr) {
-        console.error("Firebase Init Crash:", firebaseErr);
-        return res.status(200).json({ error: "ฐานข้อมูลหลังบ้านไม่ตอบสนอง แต่ด่าน CORS ผ่านฉลุย" });
+    } catch (err) {
+        return res.status(200).json({ error: "Database Connection Error" });
     }
-
-    let bodyData = req.body;
-    if (typeof bodyData === 'string' && bodyData.trim() !== '') {
-        try {
-            bodyData = JSON.parse(bodyData);
-        } catch (e) {}
-    }
-
-    if (!bodyData) bodyData = {};
-    const { action, roomId, playerName, tileId, option } = bodyData;
-
-    if (!roomId) return res.status(200).json({ error: "Missing roomId" });
-    const roomRef = ref(db, 'csfiles_rooms/' + roomId);
 
     try {
         if (action === 'join') {
             const snapshot = await get(roomRef);
             const data = snapshot.val();
-
             if (!data) {
                 const initialRoom = {
-                    status: "lobby",
-                    forensic: playerName, 
-                    murderer: "", 
-                    weapon: "", 
-                    clue: "",
+                    status: "lobby", forensic: playerName, murderer: "", weapon: "", clue: "", winner: "",
                     selections: { location: "", cause: "", body: "", motive: "" },
-                    players: { [playerName]: "waiting" }
+                    players: { [playerName]: { status: "waiting", hasAccused: false } }
                 };
                 await set(roomRef, initialRoom);
-                return res.status(200).json({ success: true });
             } else {
-                await update(ref(db, `csfiles_rooms/${roomId}/players`), { [playerName]: "waiting" });
-                return res.status(200).json({ success: true });
+                await update(ref(db, `csfiles_rooms/${roomId}/players`), { [playerName]: { status: "waiting", hasAccused: false } });
             }
+            return res.status(200).json({ success: true });
         }
 
         if (action === 'getRoom') {
             const snapshot = await get(roomRef);
-            const data = snapshot.val();
-            if (!data) return res.status(200).json({ status: "none" });
-            return res.status(200).json(data);
+            return res.status(200).json(snapshot.val() || { status: "none" });
         }
 
         if (action === 'startGame') {
@@ -101,45 +74,64 @@ export default async function handler(req, res) {
             if (data) {
                 let playersUpdate = {};
                 const playerNames = Object.keys(data.players);
-                
-                // 1. สุ่มเลือกผู้เล่น 1 คนให้มารับบทเป็นฆาตกร (หลีกเลี่ยงคนที่เป็นคนชันสูตรหลักฐาน)
                 let murdererName = playerNames.find(p => p !== data.forensic) || playerNames[0];
-                
-                let selectedWeapon = "";
-                let selectedClue = "";
 
-                // 2. ลูปแจกแจงการ์ดแบบสุ่มคำศัพท์ไม่ซ้ำกันให้เจ้าหน้าที่สืบสวนแต่ละนาย
                 playerNames.forEach(p => {
-                    const assignedWeapons = getRandomItems(WEAPONS_POOL, 4);
-                    const assignedClues = getRandomItems(CLUES_POOL, 4);
-
-                    // เก็บเป้าหมายคดีหลักฐานลับของฆาตกรที่สุ่มได้จากการ์ดในมือของฆาตกรคนนั้น
-                    if (p === murdererName) {
-                        selectedWeapon = assignedWeapons[0];
-                        selectedClue = assignedClues[0];
-                    }
-
                     playersUpdate[p] = {
                         role: p === murdererName ? "murderer" : (p === data.forensic ? "forensic" : "investigator"),
-                        weapons: assignedWeapons,
-                        clues: assignedClues
+                        weapons: getRandomItems(WEAPONS_POOL, 4),
+                        clues: getRandomItems(CLUES_POOL, 4),
+                        hasAccused: false
                     };
                 });
 
-                // 3. บันทึกข้อมูลคดีหลักฐานลับลงในฐานข้อมูล Firebase
                 await update(ref(db, `csfiles_rooms/${roomId}`), {
-                    status: "playing",
+                    status: "murderer_select",
                     murderer: murdererName,
-                    weapon: selectedWeapon,
-                    clue: selectedClue,
                     players: playersUpdate
                 });
             }
             return res.status(200).json({ success: true });
         }
 
+        // 🛠️ ฆาตกรส่งหลักฐานและอาวุธที่แอบเลือกใช้ก่อคดี
+        if (action === 'selectCrime') {
+            await update(ref(db, `csfiles_rooms/${roomId}`), {
+                weapon: weapon,
+                clue: clue,
+                status: "playing"
+            });
+            return res.status(200).json({ success: true });
+        }
+
+        // 🛠️ นักพิสูจน์หลักฐานกดปักหมุดกระดานชันสูตร
         if (action === 'selectTile') {
             await update(ref(db, `csfiles_rooms/${roomId}/selections`), { [tileId]: option });
+            return res.status(200).json({ success: true });
+        }
+
+        // 🛠️ ระบบกดส่งคำขอจับกุมคดี ตรวจสอบเงื่อนไขแพ้-ชนะแบบสากล
+        if (action === 'accuse') {
+            const snapshot = await get(roomRef);
+            const data = snapshot.val();
+            if (data && data.status === "playing") {
+                await update(ref(db, `csfiles_rooms/${roomId}/players/${playerName}`), { hasAccused: true });
+                
+                // ตรวจสอบกฎเหล็ก: ชี้ตัว [ฆาตกร + อาวุธ + หลักฐาน] ถูกต้องพร้อมกันเป๊ะๆ ทั้ง 3 อย่าง
+                if (targetPlayer === data.murderer && accusedWeapon === data.weapon && accusedClue === data.clue) {
+                    await update(ref(db, `csfiles_rooms/${roomId}`), { status: "ended", winner: "investigators" });
+                } else {
+                    // ตรวจสอบเช็กว่าสิทธิ์การจับกุมของนักสืบทุกคนหมดลงแล้วหรือยัง
+                    const players = data.players;
+                    players[playerName].hasAccused = true;
+                    const investigators = Object.keys(players).filter(p => p !== data.forensic);
+                    const allFailed = investigators.every(p => players[p].hasAccused === true);
+                    
+                    if (allFailed) {
+                        await update(ref(db, `csfiles_rooms/${roomId}`), { status: "ended", winner: "murderer" });
+                    }
+                }
+            }
             return res.status(200).json({ success: true });
         }
 
@@ -147,10 +139,8 @@ export default async function handler(req, res) {
             await set(roomRef, null);
             return res.status(200).json({ success: true });
         }
-
         return res.status(200).json({ status: "ok" });
-
     } catch (error) {
-        return res.status(500).json({ error: error.message });
+        return res.status(200).json({ error: error.message });
     }
 }
